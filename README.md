@@ -9,3 +9,8 @@
 - https://www.cs.cornell.edu/home/rvr/papers/GossipFD.pdf
 - https://github.com/flopezluis/gossip
 - https://flopezluis.github.io/gossip-simulator/
+
+
+# Turbine
+- https://www.helius.dev/blog/turbine-block-propagation-on-solana
+- 
