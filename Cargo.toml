@@ -4,3 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+solana-client = "1.18"
+solana-gossip = "1.18"
+solana-net-utils = "1.18"
+solana-program = "1.18"
+solana-sdk = "1.18"
+solana-streamer = "1.18"
+tokio = { version = "1.36.0", features = ["full"] }

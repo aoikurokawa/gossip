@@ -1,5 +1,11 @@
 # Gossip Protocol
 
+## Clusters and Public RPC Endpoints
+
+https://solana.com/docs/core/clusters
+
+### Devnet
+
 ## Resources
 - https://alexromanov.github.io/2022/05/29/bchain-test-5-p2p-gossip-protocols/
 - https://www.linkedin.com/pulse/gossip-protocol-inside-apache-cassandra-soham-saha
