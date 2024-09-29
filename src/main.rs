@@ -51,7 +51,7 @@ async fn main() {
             .unwrap(),
     );
 
-    let (gossip_service, ip_echo, cluster_info) = make_gossip_node(
+    let (_gossip_service, _ip_echo, cluster_info) = make_gossip_node(
         Keypair::from_base58_string(keypair.to_base58_string().as_str()),
         Some(&gossip_entrypoint),
         exit,
@@ -64,21 +64,26 @@ async fn main() {
     sleep(Duration::from_secs(150)).await;
 
     let crds = cluster_info.gossip.crds.read().unwrap();
-    for (vote_account, vote_account_info) in active_vote_accounts.iter() {
+    for (_vote_account, vote_account_info) in active_vote_accounts.iter() {
         let validator_identity = Pubkey::from_str(&vote_account_info.node_pubkey).unwrap();
-        let validator_vote_pubkey = Pubkey::from_str(&vote_account_info.vote_pubkey).unwrap();
+        let _validator_vote_pubkey = Pubkey::from_str(&vote_account_info.vote_pubkey).unwrap();
 
-        let contact_info_key = CrdsValueLabel::ContactInfo(validator_identity);
-        let legacy_contact_info_key: CrdsValueLabel =
+        let _contact_info_key = CrdsValueLabel::ContactInfo(validator_identity);
+        let _legacy_contact_info_key: CrdsValueLabel =
             CrdsValueLabel::LegacyContactInfo(validator_identity);
-        let version_key: CrdsValueLabel = CrdsValueLabel::Version(validator_identity);
-        let legacy_version_key: CrdsValueLabel = CrdsValueLabel::LegacyVersion(validator_identity);
+        let _version_key: CrdsValueLabel = CrdsValueLabel::Version(validator_identity);
+        let _legacy_version_key: CrdsValueLabel = CrdsValueLabel::LegacyVersion(validator_identity);
+        let restart_last_voted_for_slots_key: CrdsValueLabel =
+            CrdsValueLabel::RestartLastVotedForkSlots(validator_identity);
+        let restart_heaviest_fork_key: CrdsValueLabel =
+            CrdsValueLabel::RestartHeaviestFork(validator_identity);
 
-        match crds.get::<&CrdsValue>(&contact_info_key) {
-            Some(entry) => {
-                println!("{:?}", entry);
-            }
-            None => {}
+        if let Some(entry) = crds.get::<&CrdsValue>(&restart_last_voted_for_slots_key) {
+            println!("{:?}", entry);
+        }
+
+        if let Some(entry) = crds.get::<&CrdsValue>(&restart_heaviest_fork_key) {
+            println!("{:?}", entry);
         }
     }
 }
