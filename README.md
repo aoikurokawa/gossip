@@ -6,6 +6,12 @@ https://solana.com/docs/core/clusters
 
 ### Devnet
 
+Gossip entrypoint for Devnet: entrypoint.devnet.solana.com:8001
+
+### Mainnet Beta
+
+Gossip entrypoint for Mainnet Beta: entrypoint.mainnet-beta.solana.com:8001
+
 ## Resources
 - https://alexromanov.github.io/2022/05/29/bchain-test-5-p2p-gossip-protocols/
 - https://www.linkedin.com/pulse/gossip-protocol-inside-apache-cassandra-soham-saha

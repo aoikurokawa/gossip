@@ -23,7 +23,7 @@ use tokio::time::sleep;
 
 #[tokio::main]
 async fn main() {
-    let client = RpcClient::new("https://api.devnet.solana.com".to_string());
+    let client = RpcClient::new("https://api.mainnet-beta.solana.com".to_string());
     let active_vote_accounts: HashMap<Pubkey, RpcVoteAccountInfo> = HashMap::from_iter(
         get_vote_accounts_with_retry(&client, 5, None)
             .await
@@ -37,7 +37,7 @@ async fn main() {
             }),
     );
     let gossip_entrypoint =
-        solana_net_utils::parse_host_port("entrypoint.devnet.solana.com:8001").unwrap();
+        solana_net_utils::parse_host_port("entrypoint.mainnet-beta.solana.com:8001").unwrap();
 
     let keypair = Arc::new(
         read_keypair_file("~/.config/solana/id.json").expect("Failed reading keypair file"),
