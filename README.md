@@ -1,5 +1,7 @@
 # Gossip Protocol
 
+14 different messages
+
 ## Clusters and Public RPC Endpoints
 
 https://solana.com/docs/core/clusters
