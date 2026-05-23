@@ -9,6 +9,7 @@ name = "gossip"
 [dependencies]
 solana-gossip = { version = "=4.0.0", features = ["agave-unstable-api"] }
 solana-sdk = { version = "=4.0.0" }
+solana-client = { version = "=4.0.0" }
 solana-net-utils = { version = "=4.0.0", features = ["agave-unstable-api"] }
 tokio = { version = "1", features = ["full"] }
 log = "0.4"

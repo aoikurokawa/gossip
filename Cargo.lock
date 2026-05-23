@@ -2463,6 +2463,7 @@ dependencies = [
  "clap 4.6.1",
  "env_logger",
  "log",
+ "solana-client",
  "solana-gossip",
  "solana-net-utils",
  "solana-sdk",

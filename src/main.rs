@@ -1,11 +1,13 @@
 use anyhow::{anyhow, Context, Result};
 use clap::Parser;
 use log::*;
+use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_gossip::contact_info::ContactInfo;
 use solana_gossip::gossip_service::make_node;
 use solana_net_utils::socket_addr_space::SocketAddrSpace;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Keypair;
+use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::str::FromStr;
 use std::sync::{
@@ -31,6 +33,10 @@ struct Args {
     #[arg(short, long)]
     entrypoint: Vec<String>,
 
+    /// RPC URL for vote account lookup, e.g. https://api.mainnet-beta.solana.com
+    #[arg(short, long)]
+    rpc_url: Option<String>,
+
     /// Seconds to wait for gossip discovery
     #[arg(short, long, default_value_t = 60)]
     wait: u64,
@@ -38,6 +44,10 @@ struct Args {
     /// Filter to a specific validator identity pubkey
     #[arg(short, long)]
     identity: Option<String>,
+
+    /// Only show nodes that have a corresponding vote account (requires --rpc-url)
+    #[arg(long)]
+    validators_only: bool,
 }
 
 struct EchoResponse {
@@ -82,7 +92,38 @@ async fn fetch_ip_and_shred_version(entrypoint: &str) -> Result<EchoResponse> {
     EchoResponse::try_from(&buf[..n])
 }
 
-fn print_node(ci: &ContactInfo, cluster_info: &solana_gossip::cluster_info::ClusterInfo) {
+// Build identity → vote_pubkey map from getVoteAccounts RPC call.
+// Both current and delinquent validators are included.
+async fn fetch_vote_account_map(rpc_url: &str) -> Result<HashMap<Pubkey, Pubkey>> {
+    let client = RpcClient::new(rpc_url.to_string());
+    let response = client
+        .get_vote_accounts()
+        .await
+        .context("getVoteAccounts RPC call failed")?;
+
+    let mut map = HashMap::new();
+    for va in response.current.iter().chain(response.delinquent.iter()) {
+        if let (Ok(identity), Ok(vote)) = (
+            Pubkey::from_str(&va.node_pubkey),
+            Pubkey::from_str(&va.vote_pubkey),
+        ) {
+            map.insert(identity, vote);
+        }
+    }
+    info!(
+        "fetched {} vote accounts ({} current, {} delinquent)",
+        map.len(),
+        response.current.len(),
+        response.delinquent.len()
+    );
+    Ok(map)
+}
+
+fn print_node(
+    ci: &ContactInfo,
+    cluster_info: &solana_gossip::cluster_info::ClusterInfo,
+    vote_map: &HashMap<Pubkey, Pubkey>,
+) {
     let pubkey = ci.pubkey();
     let gossip = ci
         .gossip()
@@ -98,22 +139,43 @@ fn print_node(ci: &ContactInfo, cluster_info: &solana_gossip::cluster_info::Clus
         .map(|v| v.to_string())
         .unwrap_or_else(|| "unknown".to_string());
 
+    let vote_account = vote_map
+        .get(pubkey)
+        .map(|v| v.to_string())
+        .unwrap_or_else(|| "none".to_string());
+
     println!(
-        "identity={pubkey}  gossip={gossip}  version={version}  shred={shred_version}  wallclock={wallclock}"
+        "identity={pubkey}  vote={vote_account}  gossip={gossip}  version={version}  shred={shred_version}  wallclock={wallclock}"
     );
 }
 
 async fn run_for_entrypoints(
     entrypoints: &[SocketAddr],
+    rpc_url: Option<&str>,
     wait_secs: u64,
     filter: Option<Pubkey>,
+    validators_only: bool,
 ) -> Result<()> {
+    // Fetch vote accounts from RPC (if URL provided) concurrently with IP echo
+    let vote_map_future = async {
+        match rpc_url {
+            Some(url) => fetch_vote_account_map(url).await,
+            None => Ok(HashMap::new()),
+        }
+    };
+
     // Use the first entrypoint to discover our public IP and the cluster shred version
     let first = entrypoints
         .first()
         .ok_or_else(|| anyhow!("no entrypoints provided"))?;
     info!("fetching public IP and shred version from {first}");
-    let echo = fetch_ip_and_shred_version(&first.to_string()).await?;
+
+    let first_str = first.to_string();
+    let (echo_result, vote_map) =
+        tokio::join!(fetch_ip_and_shred_version(&first_str), vote_map_future);
+
+    let echo = echo_result?;
+    let vote_map = vote_map?;
     let gossip_ip = echo.ip;
     let shred_version = echo.shred_version.unwrap_or(0);
     info!("public IP={gossip_ip}  shred_version={shred_version}");
@@ -140,19 +202,34 @@ async fn run_for_entrypoints(
     sleep(Duration::from_secs(wait_secs)).await;
 
     // all_peers() returns (ContactInfo, local_timestamp) pairs filtered by shred_version
-    let peers = cluster_info.all_peers();
-    let peers: Vec<_> = if let Some(pk) = filter {
-        peers
-            .into_iter()
-            .filter(|(ci, _)| ci.pubkey() == &pk)
-            .collect()
-    } else {
-        peers
-    };
+    let all_peers = cluster_info.all_peers();
+    let total = all_peers.len();
 
-    println!("\n--- gossip nodes discovered: {} ---", peers.len());
+    let peers: Vec<_> = all_peers
+        .into_iter()
+        .filter(|(ci, _)| {
+            if let Some(pk) = filter {
+                ci.pubkey() == &pk
+            } else if validators_only {
+                vote_map.contains_key(ci.pubkey())
+            } else {
+                true
+            }
+        })
+        .collect();
+
+    if validators_only {
+        println!(
+            "\n--- validators (with vote account): {} / {} total gossip nodes ---",
+            peers.len(),
+            total
+        );
+    } else {
+        println!("\n--- gossip nodes discovered: {} ---", peers.len());
+    }
+
     for (ci, _ts) in &peers {
-        print_node(ci, &cluster_info);
+        print_node(ci, &cluster_info, &vote_map);
     }
 
     exit.store(true, Ordering::Relaxed);
@@ -178,13 +255,32 @@ async fn main() -> Result<()> {
     let entrypoints: Vec<SocketAddr> = args
         .entrypoint
         .iter()
-        .map(|s| {
-            s.parse::<SocketAddr>()
-                .with_context(|| format!("invalid entrypoint: {s}"))
+        .enumerate()
+        .filter_map(|(i, s)| {
+            if s.is_empty() {
+                return None;
+            }
+            Some(
+                solana_net_utils::parse_host_port(s).unwrap_or_else(|e| {
+                    panic!("failed to parse entrypoint #{} '{}': {}", i + 1, s, e)
+                }),
+            )
         })
-        .collect::<Result<_>>()?;
+        .collect();
 
-    if let Err(e) = run_for_entrypoints(&entrypoints, args.wait, filter).await {
+    if args.validators_only && args.rpc_url.is_none() {
+        return Err(anyhow!("--validators-only requires --rpc-url"));
+    }
+
+    if let Err(e) = run_for_entrypoints(
+        &entrypoints,
+        args.rpc_url.as_deref(),
+        args.wait,
+        filter,
+        args.validators_only,
+    )
+    .await
+    {
         error!("{e:#}");
         std::process::exit(1);
     }
