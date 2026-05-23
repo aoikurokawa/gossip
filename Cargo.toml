@@ -1,18 +1,18 @@
 [package]
-name = "trust"
+name = "gossip"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[[bin]]
+name = "gossip"
 
 [dependencies]
-tun-tap = "0.1.2"
-etherparse = "0.8.0"
-bitflags = "1.0"
-nix = "0.13"
-
-[lib]
-name = "trust"
-
-[[bin]]
-name = "trust"
+solana-gossip = { version = "=4.0.0", features = ["agave-unstable-api"] }
+solana-sdk = { version = "=4.0.0" }
+solana-client = { version = "=4.0.0" }
+solana-net-utils = { version = "=4.0.0", features = ["agave-unstable-api"] }
+tokio = { version = "1", features = ["full"] }
+log = "0.4"
+env_logger = "0.11"
+clap = { version = "4", features = ["derive"] }
+anyhow = "1"
